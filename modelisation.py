@@ -4,7 +4,11 @@ import matplotlib.pyplot as plt
 piece = np.array([[0,0,0],[1,0,0],[2,0,0],[3,0,0],[2,1,0]])
 piece_max = np.array([[4,4,4],[0,0,0],[0,4,4],[4,0,4],[4,4,0]])
 
-def all_pieces():
+def init_random_pieces():
+    """Generate initial random pieces.
+    
+    returns:
+        list[Piece]"""
     all_coord = []
     for i in range(5):
         for j in range(5):
@@ -18,6 +22,13 @@ def all_pieces():
     return pieces
 
 def is_valid(piece):
+    """Check if a piece is valid.
+    
+    args: 
+        piece: np.array
+    
+    returns:
+        bool"""
     in_plan = False
     plan = 0
     for j in range(3):
@@ -41,7 +52,7 @@ class Piece:
         self.update_loss()
 
     def update_loss(self):
-        # sum of the distance of each point to all others of the piece
+        """Update the loss of the piece."""
         somme = 0
         for i in range(len(self.piece)):
             for j in range(i+1, len(self.piece)):
@@ -51,16 +62,17 @@ class Piece:
             if np.all([self.piece[i,j] == self.piece[i+1,j] for i in range(4)]):
                 plan = True
                 break
-        self.loss = 1-np.abs((somme-18)/54)
-        if plan and is_valid(self.piece):
-            self.loss *= 1.5
+        self.loss = (1-np.abs((somme-18)/54))**2 # la puissance est là pour que la loss soit plus sensible aux petites variations prohe de 1.
+        if plan and is_valid(self.piece): # il faut que ce soit petit sinon les pièces sont trop rigides.
+            self.loss *= 1.005
         if is_valid(self.piece):
-            self.loss *= 2
+            self.loss *= 1.01
     
     def show(self):
         print(self.piece)
 
 def indice(i):
+    """Get the indices of a piece from its index in the cube."""
     return int(i//5),int(i%5)
 
 class Modelisation:
@@ -68,15 +80,17 @@ class Modelisation:
     pieces : list[Piece]
     def __init__(self):
         self.cube = np.zeros((5,5,5))
-        self.pieces = all_pieces()
+        self.pieces = init_random_pieces()
         for i in range(len(self.pieces)):
             for j in range(5):
                 self.cube_cible[self.pieces[i].piece[j][0],self.pieces[i].piece[j][1],self.pieces[i].piece[j][2]] = j + 5*i 
     
     def loss(self):
+        """Get the loss of the modelisation."""
         return np.sum([piece.loss for piece in self.pieces])/len(self.pieces)
     
-    def step(self, epsilon = 0.001, zeta = 0.5, nu = 0.001):
+    def step(self, epsilon = 0.001, zeta = 0.0001, nu = 0.001):
+        """Make a step of the modelisation."""
         l_current = self.loss()
         min_piece = self.pieces[0].loss
         min_piece_i_1 = 0
@@ -88,7 +102,6 @@ class Modelisation:
                 min_piece_i_2 = i
         if np.random.random()<zeta:
             x = self.pieces[min_piece_i_1].piece[np.random.randint(0,5)]
-            y = self.pieces[min_piece_i_2].piece[np.random.randint(0,5)]
             if np.random.random()>nu:
                 y = self.pieces[min_piece_i_2].piece[np.random.randint(0,5)]
             else:
@@ -107,6 +120,12 @@ class Modelisation:
         
 
     def flip(self, x,y):
+        """Flip two pieces.
+        
+        args:
+            x: np.array(3,)
+            y: np.array(3,)
+        (x and y are the coordinates of the pieces to flip in the cube_cible)"""
         i_px, j_px = indice(self.cube_cible[x[0],x[1],x[2]])
         i_py, j_py = indice(self.cube_cible[y[0],y[1],y[2]])
         self.cube_cible[x[0],x[1],x[2]], self.cube_cible[y[0],y[1],y[2]] = self.cube_cible[y[0],y[1],y[2]], self.cube_cible[x[0],x[1],x[2]]
@@ -127,7 +146,7 @@ model_1 = Modelisation()
 print("start: ", model_1.cube_cible)
 print("start loss: ", model_1.loss())
 
-n = 1000000
+n = 300000
 loss = []
 print("start...")
 for epoch in range(n):
@@ -136,10 +155,11 @@ for epoch in range(n):
         print(epoch)
         print("..........")
         print("loss: ", curr_loss)
-    if curr_loss > 2.95:
+    if curr_loss > 1.0604:
         break
     loss.append(curr_loss)
-    model_1.step(epsilon = 0.001/np.log(epoch+2), zeta = 0.01*50*np.tanh(np.log(epoch+2)), nu = 0.0001)
+    # zeta = 0.8*np.tanh(np.log(epoch+2))
+    model_1.step(epsilon = 0.00001/np.log(epoch+2), zeta = 0.01/np.log(epoch+2), nu = 0.0001/np.log(epoch+2))
 
 print("end: ", model_1.show())
 for i in range(25):
